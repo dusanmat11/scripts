@@ -1,0 +1,4 @@
+netsh.exe http add sslcert hostnameport=URL:PORT certhash= THUMBPRINT appid="{00000000-0000-0000-0000-000000000000}" certstorename=MY
+
+URL:PORT -> should be set 
+THUMBPRINT -> should be set from certificate on the server
