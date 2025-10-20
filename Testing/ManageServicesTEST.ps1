@@ -1,3 +1,9 @@
+# Check if script is run as Administrator
+if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Write-Warning "This script must be run as Administrator. Exiting."
+    exit 1
+}
+
 # Define the patterns to match service names
 $patterns = @("*WebApiService*", "*WebApi193Service*")
 
@@ -8,14 +14,25 @@ if (-not (Test-Path -Path $outputDir)) {
     New-Item -Path $outputDir -ItemType Directory -Force | Out-Null
 }
 
+# Global cache for matching services to avoid multiple CIM queries
+$global:CachedServices = $null
+
 function Get-MatchingServices {
     param([string[]]$patterns)
-    Get-CimInstance -ClassName Win32_Service | Where-Object {
+
+    if ($global:CachedServices -ne $null) {
+        return $global:CachedServices
+    }
+
+    $services = Get-CimInstance -ClassName Win32_Service | Where-Object {
         foreach ($pattern in $patterns) {
             if ($_.Name -like $pattern) { return $true }
         }
         return $false
     } | Sort-Object Name
+
+    $global:CachedServices = $services
+    return $services
 }
 
 function Get-ServiceExecutablePath {
@@ -37,7 +54,7 @@ function Get-ServiceExecutablePath {
             return "Service not found."
         }
     } catch {
-        return "Error retrieving path: $_"
+        return "Error retrieving path: $($_.Exception.Message)"
     }
 }
 
@@ -58,6 +75,8 @@ function List-Services {
 
     for ($i = 0; $i -lt $services.Count; $i++) {
         $svc = $services[$i]
+
+        # Get executable path once per service
         $exePath = Get-ServiceExecutablePath -serviceName $svc.Name
 
         if ($ShowOutput) {
@@ -69,15 +88,26 @@ function List-Services {
         }
 
         $serviceDetails += [pscustomobject]@{
-            "Index"          = $i + 1
-            "Service Name"   = $svc.Name
-            "Display Name"   = $svc.DisplayName
-            "Status"         = $svc.State
-            "Executable Path"= $exePath
+            "Index"           = $i + 1
+            "Service Name"    = $svc.Name
+            "Display Name"    = $svc.DisplayName
+            "Status"          = $svc.State
+            "Executable Path" = $exePath
         }
     }
 
     return $serviceDetails
+}
+
+function Refresh-ServiceStatus {
+    param([string]$serviceName)
+    try {
+        $updatedService = Get-CimInstance -ClassName Win32_Service -Filter "Name='$serviceName'"
+        return $updatedService.State
+    } catch {
+        Write-Warning "Failed to refresh status for service '$serviceName': $($_.Exception.Message)"
+        return $null
+    }
 }
 
 function Start-Services {
@@ -94,9 +124,11 @@ function Start-Services {
             Write-Host "Starting service '$($service.'Service Name')'..." -ForegroundColor Cyan
             try {
                 Start-Service -Name $service.'Service Name' -ErrorAction Stop
-                Write-Host "Service '$($service.'Service Name')' started successfully." -ForegroundColor Green
+                # Refresh status after starting
+                $service.Status = Refresh-ServiceStatus -serviceName $service.'Service Name'
+                Write-Host "Service '$($service.'Service Name')' started successfully. Status: $($service.Status)" -ForegroundColor Green
             } catch {
-                Write-Warning "Failed to start service '$($service.'Service Name')': $_"
+                Write-Warning "Failed to start service '$($service.'Service Name')': $($_.Exception.Message)"
             }
         } else {
             Write-Host "Service '$($service.'Service Name')' is already running." -ForegroundColor Yellow
@@ -118,9 +150,11 @@ function Stop-Services {
             Write-Host "Stopping service '$($service.'Service Name')'..." -ForegroundColor Cyan
             try {
                 Stop-Service -Name $service.'Service Name' -ErrorAction Stop
-                Write-Host "Service '$($service.'Service Name')' stopped successfully." -ForegroundColor Green
+                # Refresh status after stopping
+                $service.Status = Refresh-ServiceStatus -serviceName $service.'Service Name'
+                Write-Host "Service '$($service.'Service Name')' stopped successfully. Status: $($service.Status)" -ForegroundColor Green
             } catch {
-                Write-Warning "Failed to stop service '$($service.'Service Name')': $_"
+                Write-Warning "Failed to stop service '$($service.'Service Name')': $($_.Exception.Message)"
             }
         } else {
             Write-Host "Service '$($service.'Service Name')' is already stopped." -ForegroundColor Yellow
@@ -163,7 +197,7 @@ function Export-ServiceDetails {
         $content | Out-File -FilePath $outputFile -Encoding UTF8
         Write-Host "Service details exported to $outputFile" -ForegroundColor Green
     } catch {
-        Write-Warning "Failed to export service details: $_"
+        Write-Warning "Failed to export service details: $($_.Exception.Message)"
     }
 }
 
@@ -176,6 +210,7 @@ function Check-ServiceStatus {
 
     do {
         $input = Read-Host "Enter the number of services to display (type 'all' or press Enter for all)"
+        $input = $input.Trim()
         if ([string]::IsNullOrWhiteSpace($input) -or $input.ToLower() -eq 'all') {
             $limit = $services.Count
             break
@@ -242,6 +277,7 @@ function Change-StartupType {
     }
 
     $selectedIndices = Read-Host "`nEnter the numbers of services to configure (comma-separated, or 'all')"
+    $selectedIndices = $selectedIndices.Trim()
     if ($selectedIndices.ToLower() -eq "all") {
         $selectedServices = $Services
     } else {
@@ -267,6 +303,7 @@ function Change-StartupType {
     Write-Host "3. Manual"
     Write-Host "4. Disabled"
     $startupChoice = Read-Host "Enter your choice (1-4)"
+    $startupChoice = $startupChoice.Trim()
 
     $startupConfig = switch ($startupChoice) {
         "1" { @{Type = "Automatic"; StartMode = "Automatic"; Delayed = $false} }
@@ -299,7 +336,7 @@ function Change-StartupType {
             }
             Write-Host "Startup type set successfully." -ForegroundColor Green
         } catch {
-            Write-Warning "Failed to set startup type for service '$($svc.Name)': $_"
+            Write-Warning "Failed to set startup type for service '$($svc.Name)': $($_.Exception.Message)"
         }
     }
 }
@@ -310,16 +347,17 @@ function Show-Menu {
         Write-Host "1. List all matching services"
         Write-Host "2. Start all stopped matching services"
         Write-Host "3. Stop all running matching services"
-        Write-Host "4. Export matching services details to txt"
-        Write-Host "5. Check status of services (limited display)"
-        Write-Host "6. Change startup type of matching services"
+        Write-Host "4. Export service details to file"
+        Write-Host "5. Check service status (partial)"
+        Write-Host "6. Change startup type of selected services"
         Write-Host "7. Exit"
         $choice = Read-Host "Enter your choice (1-7)"
+        $choice = $choice.Trim()
 
         $services = Get-MatchingServices -patterns $patterns
-        if (-not $services -or $services.Count -eq 0) {
-            Write-Warning "No matching services found."
-            if ($choice -ne "7") { continue }
+        if (-not $services) {
+            Write-Warning "No matching services found. Exiting menu."
+            break
         }
 
         switch ($choice) {
@@ -327,38 +365,46 @@ function Show-Menu {
                 List-Services -ShowOutput
             }
             "2" {
-                $details = List-Services -ShowOutput:$false
-                if ($details) { Start-Services -services $details }
-            }
-            "3" {
-                $details = List-Services -ShowOutput:$false
-                if ($details) { Stop-Services -services $details }
-            }
-            "4" {
-                $details = List-Services -ShowOutput:$false
-                if ($details) { Export-ServiceDetails -services $details }
-            }
-            "5" {
-                $details = List-Services -ShowOutput:$false
-                if ($details) { Check-ServiceStatus -services $details }
-            }
-            "6" {
-                if ($services.Count -gt 0) {
-                    Change-StartupType -Services $services
+                $stoppedServices = $services | Where-Object { $_.State -ne "Running" }
+                if ($stoppedServices.Count -eq 0) {
+                    Write-Host "No stopped services found to start." -ForegroundColor Yellow
                 } else {
-                    Write-Warning "No matching services found."
+                    Start-Services -services $stoppedServices
                 }
             }
+            "3" {
+                $runningServices = $services | Where-Object { $_.State -eq "Running" }
+                if ($runningServices.Count -eq 0) {
+                    Write-Host "No running services found to stop." -ForegroundColor Yellow
+                } else {
+                    Stop-Services -services $runningServices
+                }
+            }
+            "4" {
+                $detailedServices = List-Services -ShowOutput:$false
+                if ($detailedServices) {
+                    Export-ServiceDetails -services $detailedServices
+                }
+            }
+            "5" {
+                $detailedServices = List-Services -ShowOutput:$false
+                if ($detailedServices) {
+                    Check-ServiceStatus -services $detailedServices
+                }
+            }
+            "6" {
+                Change-StartupType -Services $services
+            }
             "7" {
-                Write-Host "Exiting script..." -ForegroundColor Cyan
+                Write-Host "Exiting... Goodbye!" -ForegroundColor Green
                 break
             }
             default {
-                Write-Warning "Invalid choice. Please select a valid option (1-7)."
+                Write-Warning "Invalid choice, please select 1-7."
             }
         }
     } while ($true)
 }
 
-# Start the menu loop
+# Start the interactive menu
 Show-Menu
