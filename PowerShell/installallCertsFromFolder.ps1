@@ -3,8 +3,8 @@
 # ============================================
 
 # === CONFIGURATION ===
-$certFolder   = "C:\Temp\Certificates"   # Folder containing .cer files
-$certStore    = "LocalMachine\My"       # Certificate store where the certificate will be installed
+$certFolder   = "C:\Temp\Certificates"      # Folder containing .cer files
+$certStore    = "LocalMachine\My"          # Local Computer → Personal\Certificates store
 $logFile      = Join-Path $certFolder "CertCompletionLog.txt"  # Log file for all actions
 
 # === FUNCTIONS ===
@@ -40,29 +40,29 @@ foreach ($cer in $cerFiles) {
 
         Write-Log "Processing certificate: $cerPath"
 
-        # Step 3: Complete the certificate request and import it into the store
-        # certreq.exe -accept imports the certificate to the store
+        # Step 3: Complete the certificate request and import it into the Local Computer → Personal store
+        # certreq.exe -accept imports the certificate to LocalMachine\My
         certreq.exe -accept $cerPath
-        Write-Log "Certificate imported: $cerPath"
+        Write-Log "Certificate imported into Local Computer\Personal (LocalMachine\My): $cerPath"
 
-        # Step 4: Open the certificate store to update FriendlyName
+        # Step 4: Open the Local Computer Personal store for read/write to update FriendlyName
         $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My","LocalMachine")
         $store.Open("ReadWrite")
 
         # Step 5: Find the imported certificate in the store
-        # We match the Subject to the certificate filename
-        # If multiple certs match, we take the most recent one (Sort by NotBefore)
+        # Match by Subject containing the filename (BaseName)
+        # If multiple certs match, select the most recent one
         $importedCert = $store.Certificates |
                         Where-Object { $_.Subject -like "*$friendlyName*" } |
                         Sort-Object NotBefore -Descending |
                         Select-Object -First 1
 
-        # Step 6: Set FriendlyName to the certificate filename
+        # Step 6: Set FriendlyName to match the certificate filename
         if ($importedCert) {
             $importedCert.FriendlyName = $friendlyName
             Write-Log "FriendlyName set to: $friendlyName"
         } else {
-            Write-Log "WARNING: Could not find imported certificate in store."
+            Write-Log "WARNING: Could not find imported certificate in Local Computer\Personal store."
         }
 
         # Step 7: Close the store
@@ -74,4 +74,4 @@ foreach ($cer in $cerFiles) {
 }
 
 # Step 8: Finished processing all certificates
-Write-Log "=== Certificate completion finished ==="
+Write-Log "=== Certificate completion finished for all certificates ==="
