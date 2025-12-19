@@ -1,0 +1,1 @@
+powershell.exe -ExecutionPolicy Bypass -File "C:\Users\dusmat00\Documents\GitHub pers\scripts\Testing\md5script.ps1"
