@@ -1,85 +1,225 @@
 # ==========================================================
-# Generate CSRs or REQs for Expired / Expiring Certificates
+# Generate CSRs for Expired / Expiring Certificates
 # ==========================================================
 
-# --- Parameters ---
-$certStore = "LocalMachine\My"
-$outputPath = "C:\Temp\TESTCSR"
-$daysUntilExpire = 30  # Certificates expiring within this many days
+Import-Module WebAdministration
 
-# --- Prepare output folder ---
+# -----------------------------
+# Configuration
+# -----------------------------
+$certStore = "Cert:\LocalMachine\My"
+$outputPath = "C:\Temp\CSRRenewals"
+$daysUntilExpire = 30
+
+# Set to $true to ONLY process IIS-bound certs
+$onlyIISBound = $true
+
+# -----------------------------
+# Prepare output folder
+# -----------------------------
 if (-not (Test-Path $outputPath)) {
+
     New-Item -Path $outputPath -ItemType Directory | Out-Null
+
 }
 
-# --- Log setup ---
+# -----------------------------
+# Logging
+# -----------------------------
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $logFile = Join-Path $outputPath "CSR_GenerationLog_$timestamp.txt"
 
 function Write-Log {
+
     param([string]$Message)
+
     $time = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $entry = "[$time] $Message"
+
     Write-Host $entry
     Add-Content -Path $logFile -Value $entry
+
 }
 
-Write-Log "=== Starting CSR/REQ generation for expired or soon-to-expire certificates ==="
+Write-Log "=== Starting CSR generation process ==="
 
-# --- Ask user for output format ---
-$csrType = Read-Host "Choose CSR type (enter 'csr' or 'req')"
-if ($csrType -notin @('csr', 'req')) {
-    Write-Host "Invalid selection. Defaulting to .csr"
-    $csrType = 'csr'
+# -----------------------------
+# Verify Administrator
+# -----------------------------
+$currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+
+$principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
+
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+
+    Write-Log "ERROR: Script must be run as Administrator."
+    exit 1
+
 }
 
-# --- Collect expiring certificates ---
-$now = Get-Date
-$cutoff = $now.AddDays($daysUntilExpire)
-$certs = Get-ChildItem "Cert:\$certStore" | Where-Object { $_.NotAfter -lt $cutoff }
+# -----------------------------
+# Get IIS-bound thumbprints
+# -----------------------------
+$bindingThumbprints = @()
+
+if ($onlyIISBound) {
+
+    $bindings = Get-WebBinding | Where-Object {
+
+        $_.protocol -eq 'https'
+
+    }
+
+    foreach ($binding in $bindings) {
+
+        if ($binding.certificateHash) {
+
+            if ($binding.certificateHash -is [byte[]]) {
+
+                $thumbprint = [System.BitConverter]::ToString(
+                    $binding.certificateHash
+                ).Replace('-', '')
+
+            }
+            else {
+
+                $thumbprint = $binding.certificateHash.ToString()
+
+            }
+
+            $thumbprint = $thumbprint.Replace(' ', '').ToUpper()
+
+            $bindingThumbprints += $thumbprint
+
+        }
+    }
+
+    $bindingThumbprints = $bindingThumbprints | Select-Object -Unique
+
+}
+
+# -----------------------------
+# Find expiring certificates
+# -----------------------------
+$cutoff = (Get-Date).AddDays($daysUntilExpire)
+
+if ($onlyIISBound) {
+
+    $certs = Get-ChildItem $certStore | Where-Object {
+
+        $_.Thumbprint -in $bindingThumbprints -and
+        $_.NotAfter -lt $cutoff
+
+    }
+
+}
+else {
+
+    $certs = Get-ChildItem $certStore | Where-Object {
+
+        $_.NotAfter -lt $cutoff
+
+    }
+
+}
 
 if (-not $certs) {
-    Write-Log "No expired or soon-to-expire certificates found in store $certStore."
+
+    Write-Log "No expiring certificates found."
     exit
+
 }
 
-foreach ($cert in $certs) {
-    try {
-        # --- Extract subject fields ---
-        $subject = $cert.Subject
-        $cn = if ($subject -match "CN=([^,]+)") { $matches[1] } else { "" }
-        $o  = if ($subject -match "O=([^,]+)")  { $matches[1] } else { "" }
-        $ou = if ($subject -match "OU=([^,]+)") { $matches[1] } else { "" }
-        $l  = if ($subject -match "L=([^,]+)")  { $matches[1] } else { "" }
-        $s  = if ($subject -match "S=([^,]+)")  { $matches[1] } else { "" }
-        $c  = if ($subject -match "C=([^,]+)")  { $matches[1] } else { "" }
+Write-Log "Found $($certs.Count) expiring certificate(s)."
 
-        # --- Extract SANs ---
-        $sanList = @()
-        $sanExt = $cert.Extensions | Where-Object { $_.Oid.FriendlyName -eq "Subject Alternative Name" }
-        if ($sanExt) {
-            $rawData = $sanExt.Format($true)
-            $rawData -split ", " | ForEach-Object {
-                if ($_ -match "DNS Name=(.+)") { $sanList += $matches[1] }
+# -----------------------------
+# Process certificates
+# -----------------------------
+foreach ($cert in $certs) {
+
+    try {
+
+        Write-Log "Processing certificate: $($cert.Subject)"
+
+        # -----------------------------
+        # Safe filename
+        # -----------------------------
+        $safeName = $cert.GetNameInfo(
+            [System.Security.Cryptography.X509Certificates.X509NameType]::DnsName,
+            $false
+        )
+
+        if ([string]::IsNullOrWhiteSpace($safeName)) {
+
+            $safeName = $cert.Thumbprint.Substring(0,8)
+
+        }
+
+        # Handle wildcard certs
+        $safeName = $safeName.Replace('*', 'wildcard')
+
+        # Remove invalid filename chars
+        $safeName = $safeName -replace '[\\/:?"<>|]', '_'
+
+        # Use expiry date instead of thumbprint
+        $expiryDate = $cert.NotAfter.ToString("yyyyMMdd")
+
+        $uniqueName = "$safeName-$expiryDate"
+
+        $infPath = Join-Path $outputPath "$uniqueName.inf"
+        $csrPath = Join-Path $outputPath "$uniqueName.csr"
+
+        # -----------------------------
+        # Extract SANs
+        # -----------------------------
+        $dnsSANs = @()
+
+        foreach ($extension in $cert.Extensions) {
+
+            if ($extension.Oid.FriendlyName -eq 'Subject Alternative Name') {
+
+                $formatted = $extension.Format($true)
+
+                $entries = $formatted -split "`r`n"
+
+                foreach ($entry in $entries) {
+
+                    if ($entry -match 'DNS Name=(.+)') {
+
+                        $dnsSANs += $matches[1].Trim()
+
+                    }
+                }
             }
         }
 
-        # --- Define paths ---
-        $infPath = Join-Path $outputPath "$cn.inf"
-        $csrFile = Join-Path $outputPath "$cn.$csrType"
+        $dnsSANs = $dnsSANs | Select-Object -Unique
 
-        # --- Build INF content ---
+        if ($dnsSANs.Count -gt 0) {
+
+            Write-Log "Found SANs: $($dnsSANs -join ', ')"
+
+        }
+        else {
+
+            Write-Log "No SANs found."
+
+        }
+
+        # -----------------------------
+        # Build INF content
+        # -----------------------------
         $infContent = @"
 [Version]
-Signature="\`$Windows NT\$"
+Signature="`$Windows NT`$"
 
 [NewRequest]
-Subject = "CN=$cn, O=$o, OU=$ou, L=$l, S=$s, C=$c"
+Subject = "$($cert.Subject)"
 KeySpec = 1
 KeyLength = 2048
 Exportable = TRUE
 MachineKeySet = TRUE
-SMIME = False
+SMIME = FALSE
 PrivateKeyArchive = FALSE
 UserProtected = FALSE
 UseExistingKeySet = FALSE
@@ -87,33 +227,72 @@ ProviderName = "Microsoft RSA SChannel Cryptographic Provider"
 ProviderType = 12
 RequestType = PKCS10
 KeyUsage = 0xa0
-
-[Extensions]
-2.5.29.37 = "{text}"
-_continue_ = "1.3.6.1.5.5.7.3.1"
+HashAlgorithm = SHA256
 "@
 
-        # --- Add SANs if available ---
-        if ($sanList.Count -gt 0) {
-            $infContent += @"
-2.5.29.17 = "{text}"
-_continue_ = "DNS=$($sanList -join ', DNS=')"
-"@
+        # -----------------------------
+        # Add SANs
+        # -----------------------------
+        if ($dnsSANs.Count -gt 0) {
+
+            $infContent += "`r`n[Extensions]`r`n"
+            $infContent += '2.5.29.17 = "{text}"' + "`r`n"
+
+            $sanLines = @()
+
+            foreach ($dns in $dnsSANs) {
+
+                $sanLines += "DNS=$dns"
+
+            }
+
+            $infContent += '_continue_ = "' + ($sanLines -join '&') + '"' + "`r`n"
         }
 
-        # --- Write INF ---
-        Set-Content -Path $infPath -Value $infContent -Encoding ASCII
-        Write-Log "INF file created for $cn at $infPath"
+        # -----------------------------
+        # Write INF
+        # -----------------------------
+        Set-Content `
+            -Path $infPath `
+            -Value $infContent `
+            -Encoding ASCII
 
-        # --- Generate CSR/REQ ---
-        Start-Process -FilePath "certreq.exe" -ArgumentList "-new `"$infPath`" `"$csrFile`"" -Wait
-        Write-Log "Generated $csrType for $cn at $csrFile"
+        Write-Log "INF file created: $infPath"
 
-    } catch {
-    Write-Log "Error generating CSR/REQ for certificate CN=${cn}: $($_.Exception.Message)"
+        # -----------------------------
+        # Generate CSR
+        # -----------------------------
+        $arguments = "-new `"$infPath`" `"$csrPath`""
+
+        $process = Start-Process `
+            -FilePath "certreq.exe" `
+            -ArgumentList $arguments `
+            -Wait `
+            -PassThru `
+            -NoNewWindow
+
+        if ($process.ExitCode -eq 0 -and (Test-Path $csrPath)) {
+
+            Write-Log "CSR successfully generated: $csrPath"
+
+        }
+        else {
+
+            Write-Log "ERROR: certreq.exe failed for $($cert.Subject). ExitCode=$($process.ExitCode)"
+
+        }
+
+    }
+    catch {
+
+        Write-Log "ERROR processing certificate $($cert.Subject): $($_.Exception.Message)"
+
+    }
 }
-}
 
-Write-Log "=== CSR/REQ generation completed ==="
+Write-Log "=== CSR generation process completed ==="
 Write-Log "Log file saved to: $logFile"
-Write-Host "`nProcess completed. Log saved to: $logFile"
+
+Write-Host ""
+Write-Host "CSR generation completed."
+Write-Host "Log file: $logFile"

@@ -1,0 +1,72 @@
+General Information about applications - ARAMCO
+
+Identity Provider - idp
+Security Admin - sa
+Authorization Server - auth
+Luna - luna
+Services -services
+Publisher - publisher / pub
+SGDIWebService - sgdiserv
+SGDIClient - sgdiclient
+MobAPI - mobapi
+Cort - cort
+MobApp - mobapp
+ServiceDiscovery - sds
+Scheduler - scheduler
+Excentrim API - xnmapi
+Excentrim Client - cockpit
+
+
+Production Environment
+
+Identity Provider - idp.aramco.com
+Security Admin - sa.aramco.com
+Authorization Server - auth.aramco.com
+Luna - luna.aramco.com
+Services -services.aramco.com
+Publisher - publisher.aramco.com
+SGDIWebService - sgdiserv.aramco.com
+SGDIClient - sgdiclient.aramco.com
+MobAPI - mobapi.aramco.com
+Cort - cort.aramco.com
+MobApp - mobapp.aramco.com
+ServiceDiscovery - sds.aramco.com
+Scheduler - scheduler.aramco.com
+Excentrim API - xnmapi.aramco.com
+Excentrim Client - cockpit.aramco.com
+
+Test Environment
+
+idp-test.aramco.com
+sa-test.aramco.com
+auth-test.aramco.com
+luna-test.aramco.com
+services-test.aramco.com
+pub-test.aramco.com
+sgdiserv-test.aramco.com
+sgdiclient-test.aramco.com
+mobapi-test.aramco.com
+cort-test.aramco.com
+mobapp-test.aramco.com
+sds-test.aramco.com
+scheduler-test.aramco.com
+xnmapi-test.aramco.com
+cockpit-test.aramco.com
+
+Development Environment
+
+idp-dev.aramco.com
+sa-dev.aramco.com
+auth-dev.aramco.com
+luna-dev.aramco.com
+services-dev.aramco.com
+pub-dev.aramco.com
+sgdiserv-dev.aramco.com
+sgdiclient-dev.aramco.com
+mobapi-dev.aramco.com
+cort-dev.aramco.com
+mobapp-dev.aramco.com
+sds-dev.aramco.com
+scheduler-dev.aramco.com
+xnmapi-dev.aramco.com
+cockpit-dev.aramco.com
