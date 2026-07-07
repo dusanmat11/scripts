@@ -1,3 +1,17 @@
+<#
+.SYNOPSIS
+    Generates HTTP.SYS SSL certificate binding commands.
+
+.DESCRIPTION
+    Creates `netsh http add sslcert` commands for one or more
+    hostname:port combinations using either a manually entered
+    certificate thumbprint or an automatically detected certificate.
+
+.NOTES
+    - Run as Administrator when executing the generated commands.
+    - The script generates commands only; it does not apply them.
+#>
+
 # Ask for comma-separated hostname:port values
 $InputLine = Read-Host "Enter hostname:port values (comma-separated)"
 

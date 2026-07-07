@@ -1,13 +1,17 @@
-# =========================================
-# Auto-Replace Expired Certificates in IIS
-# =========================================
-# - Scans Cert:\LocalMachine\My for certificates
-# - Matches expired and valid certs by Subject CN
-# - Shows what will be updated (preview mode)
-# - Asks for confirmation before making changes
-# - Keeps old certificates (no deletion)
-# - Logs all activity to C:\Temp\CertUpdateLog_yyyyMMdd_HHmmss.txt
-# =========================================
+<#
+.SYNOPSIS
+    Replaces expired IIS SSL certificates with valid replacements.
+
+.DESCRIPTION
+    Scans the local certificate store for expired certificates that have
+    newer valid certificates with the same subject, previews the IIS
+    bindings to be updated, and replaces the bindings after confirmation.
+
+.NOTES
+    - Run as Administrator.
+    - Existing certificates are not removed.
+    - All actions are logged to C:\Temp.
+#>
 
 Import-Module WebAdministration
 
