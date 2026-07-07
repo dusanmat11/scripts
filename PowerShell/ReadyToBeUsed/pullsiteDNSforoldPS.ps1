@@ -1,5 +1,15 @@
-# FOR OLDER VERSIONS OF POWERSHELL, 
-# when calling script add .\Get-IISSites.ps1 -HostnamesOnly
+<#
+.SYNOPSIS
+    Lists IIS websites and their bindings.
+
+.DESCRIPTION
+    Displays IIS websites with their URLs or, when the -HostnamesOnly
+    switch is used, outputs only the site names and hostnames.
+
+.NOTES
+    - Requires the WebAdministration module.
+    - Compatible with older PowerShell versions.
+#>
 
 param(
     [switch]$HostnamesOnly  # Use -HostnamesOnly to trim output

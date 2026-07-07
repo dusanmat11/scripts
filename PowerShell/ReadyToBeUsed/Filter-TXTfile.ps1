@@ -1,3 +1,16 @@
+<#
+.SYNOPSIS
+    Filters text from an input file based on user input.
+
+.DESCRIPTION
+    Searches the input.txt file for lines containing the specified text,
+    displays the matching results, and optionally saves them to
+    filtered_output.txt.
+
+.NOTES
+    - The input.txt file must be located in the same folder as the script.
+#>
+
 # --- Configuration ---
 # Get the folder where this script is located
 $scriptFolder = Split-Path -Parent $MyInvocation.MyCommand.Path

@@ -28,7 +28,19 @@ foreach ($Bundle in $Bundles) {
 
 2nd version of the script
 
+<#
+.SYNOPSIS
+    Installs required IIS components and .NET Hosting Bundles.
 
+.DESCRIPTION
+    Downloads and installs .NET 8, .NET 9, .NET 10 Hosting Bundles and
+    IIS URL Rewrite 2.1 if they are not already installed. IIS is restarted
+    after successful installations, and installed .NET runtimes are displayed.
+
+.NOTES
+    - Run as Administrator.
+    - Internet access is required to download the installers.
+#>
 
 
 # Create download folder

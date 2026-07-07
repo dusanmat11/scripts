@@ -1,6 +1,16 @@
-# ==========================================================
-# Generate CSRs for Expired / Expiring Certificates
-# ==========================================================
+<#
+.SYNOPSIS
+    Generates CSRs for expiring IIS SSL certificates.
+
+.DESCRIPTION
+    Finds IIS-bound SSL certificates that are expired or expiring within
+    the configured number of days and generates matching Certificate
+    Signing Requests (CSRs), preserving the original subject and SAN entries.
+
+.NOTES
+    - Run as Administrator.
+    - CSR files and logs are saved to the configured output folder.
+#>
 
 Import-Module WebAdministration
 

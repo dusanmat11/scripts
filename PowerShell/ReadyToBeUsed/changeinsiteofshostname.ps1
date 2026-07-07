@@ -1,4 +1,16 @@
-#Used to change ARM to LAN, look line 22 and 23
+<#
+.SYNOPSIS
+    Replaces IIS host headers from '-arm.' to '-lan.'.
+
+.DESCRIPTION
+    Scans all IIS website bindings and updates hostnames by replacing
+    '-arm.' with '-lan.'. Existing bindings are removed and recreated
+    with the new hostname.
+
+.NOTES
+    - Run as Administrator.
+    - Only bindings containing '-arm.' are modified.
+#>
 
 
 Import-Module WebAdministration

@@ -1,3 +1,18 @@
+<#
+.SYNOPSIS
+    Manages HTTP.SYS SSL certificate bindings.
+
+.DESCRIPTION
+    Provides functions to view, back up, and update SSL certificate
+    bindings for configured hostnames using netsh. Certificate changes
+    are logged, and bindings are updated based on predefined certificate
+    thumbprints.
+
+.NOTES
+    - Run as Administrator.
+    - Update certificate thumbprints before use if certificates change.
+#>
+
 function Save-SSLCERT ($ver) {
     Start-Transcript -path "C:\ProgramData\IPS GmbH\logs\$ver`_SSLCERT.txt" -append
     netsh http show sslcert
