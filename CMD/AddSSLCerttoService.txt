@@ -6,3 +6,19 @@ THUMBPRINT -> should be set from certificate on the server
 old win servers
 
 netsh http add sslcert hostnameport=URL:PORT certhash=THUMBPRINT appid="{00000000-0000-0000-0000-000000000000}" certstorename=MY
+
+
+
+netsh.exe http add sslcert hostnameport=servdeloittedemo.ips-energy.com:7790 certhash= 0811b4b5ed39fc14f79b7774fd16f5c537793307 appid="{00000000-0000-0000-0000-000000000000}" certstorename=MY
+
+netsh.exe http add sslcert hostnameport=servdeloittedemo.ips-energy.com:7762 certhash= 0811b4b5ed39fc14f79b7774fd16f5c537793307 appid="{00000000-0000-0000-0000-000000000000}" certstorename=MY
+
+netsh.exe http add sslcert hostnameport=servdeloittedemo.ips-energy.com:7781 certhash= 0811b4b5ed39fc14f79b7774fd16f5c537793307 appid="{00000000-0000-0000-0000-000000000000}" certstorename=MY
+
+netsh.exe http add sslcert hostnameport=servdeloittedemo.ips-energy.com:7778 certhash= 0811b4b5ed39fc14f79b7774fd16f5c537793307 appid="{00000000-0000-0000-0000-000000000000}" certstorename=MY
+
+netsh.exe http add sslcert hostnameport=servdeloittedemo.ips-energy.com:7777 certhash= 0811b4b5ed39fc14f79b7774fd16f5c537793307 appid="{00000000-0000-0000-0000-000000000000}" certstorename=MY
+
+netsh.exe http add sslcert hostnameport=servdeloittedemo.ips-energy.com:7770 certhash= 0811b4b5ed39fc14f79b7774fd16f5c537793307 appid="{00000000-0000-0000-0000-000000000000}" certstorename=MY
+
+netsh.exe http add sslcert hostnameport=servdeloittedemo.ips-energy.com:7779 certhash= 0811b4b5ed39fc14f79b7774fd16f5c537793307 appid="{00000000-0000-0000-0000-000000000000}" certstorename=MY
